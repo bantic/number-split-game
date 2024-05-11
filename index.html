@@ -19,12 +19,16 @@
 
     .tile {
       height: var(--tile-height);
-      background-color: gray;
+      background-color: #d4f1e6;
       margin: 0.25em;
-      border: 1px solid black;
+      outline: 1px solid black;
       display: flex;
       flex-direction: row;
       position: relative;
+    }
+
+    .tile:hover {
+      outline: 0.25em solid lightgreen;
     }
 
     .label {
@@ -39,6 +43,11 @@
       outline: 0.25em solid green;
     }
 
+    .tile.selected .unit:hover {
+      background-color: #07b379;
+      color: white;
+    }
+
     .unit {
       width: var(--tile-unit);
       border: 1px dotted gray;
@@ -50,30 +59,15 @@
 
 <body>
   <button id='btn-new-game' type="submit">New Game</button>
-  <main>
-    <!-- <div class="board">
-      <div class="tile">
-        <div class="unit"></div>
-        <div class="unit"></div>
-        <div class="unit"></div>
-        <div class="unit"></div>
-        <div class="unit"></div>
-        <div class="unit"></div>
-        <div class="unit"></div>
-      </div>
-      <div class="tile">
-        <div class="unit"></div>
-        <div class="unit"></div>
-        <div class="unit"></div>
-      </div>
-      <div class="tile">
-        <div class="unit"></div>
-        <div class="unit"></div>
-        <div class="unit"></div>
-        <div class="unit"></div>
-      </div>
-    </div> -->
-  </main>
+  <main></main>
+  <footer>
+    <p>Rearrange the numbers to be in sorted order by splitting numbers or merging adjacent numbers.</p>
+    <p>Rules:</p>
+    <ol>
+      <li>No duplicate numbers allowed</li>
+      <li>No numbers larger than the original largest.</li>
+    </ol>
+  </footer>
 </body>
 
 </html>

@@ -4,13 +4,16 @@ function log(...data) {
   console.log(...data);
 }
 
-function createEl(classes = "", data = {}) {
+function createEl(classes = "", data = {}, textContent = null) {
   let el = document.createElement("div");
   for (let kls of classes.split(" ")) {
     el.classList.add(kls);
   }
   for (let [key, val] of Object.entries(data)) {
     el.dataset[key] = val;
+  }
+  if (textContent) {
+    el.textContent = textContent;
   }
   return el;
 }
@@ -60,6 +63,22 @@ function toUnsorted(list) {
   return shuffled;
 }
 
+const GAME_RULES = [
+  {
+    description: "No duplicates",
+    validate: (list, state) => {
+      return new Set(list).size === list.length;
+    },
+  },
+  {
+    description: "No numbers larger than the original largest",
+    validate: (list, state) => {
+      let max = Math.max(...state.goal);
+      return list.every((v) => v <= max);
+    },
+  },
+];
+
 class GameState {
   constructor() {
     this.els = toUnsorted(uniqueList());
@@ -96,8 +115,20 @@ class GameState {
     return ret;
   }
 
-  applyMove(move) {
-    this.moves.push(move);
+  validate(list) {
+    let failed = GAME_RULES.filter((rule) => {
+      return !rule.validate(list, this);
+    }).map((rule) => rule.description);
+    return failed;
+  }
+
+  validateMove(move) {
+    let nextEls = this.evalNextState(move);
+    let failures = this.validate(nextEls);
+    return failures;
+  }
+
+  evalNextState(move) {
     if (move instanceof MoveSplitTile) {
       let { tileIndex, splitIndex } = move;
       let value = this.els[tileIndex];
@@ -105,32 +136,63 @@ class GameState {
       let splitRight = value - splitLeft;
       let nextEls = [...this.els];
       nextEls.splice(tileIndex, 1, splitLeft, splitRight);
-
-      this.els = nextEls;
-      this.changeMode(MODES.PLAY);
-      return true;
+      return nextEls;
     } else if (move instanceof MoveMergeTiles) {
       let { tileIndexA, tileIndexB } = move;
       let [beforeIndex, afterIndex] = [tileIndexA, tileIndexB].toSorted();
       let merged = this.els[beforeIndex] + this.els[afterIndex];
       let nextEls = [...this.els];
       nextEls.splice(beforeIndex, 2, merged);
-      this.els = nextEls;
-      this.changeMode(MODES.PLAY);
-      return true;
+      return nextEls;
+    } else if (move instanceof MoveReset) {
+      return [...this.els];
+    } else {
+      throw new Error("unknown move: " + move);
     }
+  }
+
+  applyMove(move) {
+    let failures = this.validateMove(move);
+    if (failures.length) {
+      log("Could not apply move:", failures);
+      this.changeMode(MODES.PLAY);
+      return false;
+    }
+
+    if (!move.isNoOp()) {
+      // Only record history for real moves
+      this.moves.push(move);
+    }
+    this.els = this.evalNextState(move);
+    this.changeMode(MODES.PLAY);
+    return true;
   }
 }
 
-class MoveSplitTile {
+class GameMove {
+  isNoOp() {
+    return false;
+  }
+}
+
+// Default no-op move
+class MoveReset extends GameMove {
+  isNoOp() {
+    return true;
+  }
+}
+
+class MoveSplitTile extends GameMove {
   constructor(tileIndex, splitIndex) {
+    super();
     this.tileIndex = tileIndex;
     this.splitIndex = splitIndex;
   }
 }
 
-class MoveMergeTiles {
+class MoveMergeTiles extends GameMove {
   constructor(tileIndexA, tileIndexB) {
+    super();
     this.tileIndexA = tileIndexA;
     this.tileIndexB = tileIndexB;
   }
@@ -158,25 +220,18 @@ class Game {
     if (this.state.mode === MODES.PLAY) {
       this.state.select(tileIndex);
     } else if (this.state.mode === MODES.SELECTED_TILE) {
+      let move = new MoveReset(); // default move
+
       if (this.state.isSelected(tileIndex)) {
         log("tile at index", tileIndex, "is selected, splitting");
         let unit = event.target;
         let splitIndex = parseInt(unit.dataset.index);
-        let move = new MoveSplitTile(tileIndex, splitIndex);
-        if (!this.state.applyMove(move)) {
-          throw new Error("cannot apply move split tile");
-        }
-        // which unit did we click on?
-        // let target =
+        move = new MoveSplitTile(tileIndex, splitIndex);
       } else if (this.state.isAdjacentToSelected(tileIndex)) {
-        let move = new MoveMergeTiles(this.state.selectedTileIndex, tileIndex);
-        if (!this.state.applyMove(move)) {
-          throw new Error("cannt apply movemergetiles");
-        }
+        move = new MoveMergeTiles(this.state.selectedTileIndex, tileIndex);
       }
-      // if clicking again on a selected tile, split
-      // at that spot (if valid)
-      // if clicking on a neighbor tile, merge (if valid)
+
+      this.state.applyMove(move);
     }
 
     this.render();
@@ -184,6 +239,8 @@ class Game {
 
   render() {
     this.root.innerHTML = "";
+    let goal = createEl("goal", {}, `Goal: ${this.state.goal.join(" ")}`);
+    let moves = createEl("moves", {}, `Moves: ${this.state.moves.length}`);
     let board = createEl("board");
 
     for (let tileIndex = 0; tileIndex < this.state.els.length; tileIndex++) {
@@ -193,19 +250,18 @@ class Game {
         tile.classList.add("selected");
       }
       for (let j = 0; j < value; j++) {
-        let unit = createEl("unit");
-        unit.textContent = `${j + 1}`;
-        unit.dataset.index = j;
+        let unit = createEl("unit", { index: j }, `${j + 1}`);
         tile.appendChild(unit);
       }
-      let label = document.createElement("div");
-      label.classList.add("label");
-      label.textContent = `${value}`;
+      let label = createEl("label", {}, `${value}`);
       tile.appendChild(label);
       tile.addEventListener("click", this.handleClick.bind(this));
 
       board.appendChild(tile);
     }
+
+    this.root.appendChild(goal);
+    this.root.appendChild(moves);
     this.root.appendChild(board);
   }
 }
