@@ -226,7 +226,13 @@ class Game {
         log("tile at index", tileIndex, "is selected, splitting");
         let unit = event.target;
         let splitIndex = parseInt(unit.dataset.index);
-        move = new MoveSplitTile(tileIndex, splitIndex);
+        let tileValue = parseInt(tile.dataset.value);
+        if (splitIndex === tileValue - 1) {
+          // Can't split into a "0"-sized tile
+          move = new MoveReset();
+        } else {
+          move = new MoveSplitTile(tileIndex, splitIndex);
+        }
       } else if (this.state.isAdjacentToSelected(tileIndex)) {
         move = new MoveMergeTiles(this.state.selectedTileIndex, tileIndex);
       }
