@@ -63,29 +63,136 @@ function toUnsorted(list) {
   return shuffled;
 }
 
+function isUnique(array) {
+  return new Set(array).size === array.length;
+}
+
 const GAME_RULES = [
   {
     description: "No duplicates",
-    validate: (list, state) => {
-      return new Set(list).size === list.length;
-    },
+    validate: (list) => isUnique(list),
   },
   {
     description: "No numbers larger than the original largest",
-    validate: (list, state) => {
-      let max = Math.max(...state.goal);
-      return list.every((v) => v <= max);
-    },
+    validate: (list, { max } = {}) => list.every((v) => v <= max),
   },
 ];
 
+class GameEngine {
+  hash(list) {
+    return list.join(",");
+  }
+
+  validate(els, max) {
+    let failed = GAME_RULES.filter((rule) => !rule.validate(els, { max })).map(
+      (rule) => rule.description
+    );
+    return failed;
+  }
+
+  validateMove(move, els, { max } = {}) {
+    let nextEls = this.unconditionallyApplyMove(move, els);
+    let failures = this.validate(nextEls, max);
+    return [failures, nextEls];
+  }
+
+  solve(els) {
+    let seen = new Set();
+    let goal = els.toSorted();
+
+    // to ensure we don't think something is solved because it starts solved
+    els = toUnsorted(els);
+    let max = Math.max(...goal);
+    let stack = [];
+    stack.push([els, this.possibleMoves(els)]);
+    while (stack.length) {
+      let [els, possibleMoves] = stack.pop();
+      if (seen.has(this.hash(els))) {
+        continue;
+      }
+      if (arrayEqual(goal, els)) {
+        return true;
+      }
+      seen.add(this.hash(els));
+
+      for (let move of possibleMoves) {
+        let [failures, nextEls] = this.validateMove(move, els, { max });
+        if (failures.length === 0) {
+          stack.push([nextEls, this.possibleMoves(nextEls)]);
+        }
+      }
+    }
+
+    return false;
+  }
+
+  possibleMoves(els) {
+    let moves = [];
+
+    let unsplittable = [1, 2];
+
+    // splits
+    for (let i = 0; i < els.length; i++) {
+      let v = els[i];
+      if (unsplittable.includes(v)) {
+        continue;
+      }
+      let tileIndex = i;
+      for (let j = 0; j < v; j++) {
+        let splitIndex = j;
+        moves.push(new MoveSplitTile(tileIndex, splitIndex));
+      }
+    }
+
+    // merges
+    for (let i = 0; i < els.length - 1; i++) {
+      moves.push(new MoveMergeTiles(i, i + 1));
+    }
+
+    return moves;
+  }
+
+  unconditionallyApplyMove(move, els) {
+    if (move instanceof MoveSplitTile) {
+      let { tileIndex, splitIndex } = move;
+      let value = els[tileIndex];
+      let splitLeft = splitIndex + 1;
+      let splitRight = value - splitLeft;
+      let nextEls = [...els];
+      nextEls.splice(tileIndex, 1, splitLeft, splitRight);
+      return nextEls;
+    } else if (move instanceof MoveMergeTiles) {
+      let { tileIndexA, tileIndexB } = move;
+      let [beforeIndex, afterIndex] = [tileIndexA, tileIndexB].toSorted();
+      let merged = els[beforeIndex] + els[afterIndex];
+      let nextEls = [...els];
+      nextEls.splice(beforeIndex, 2, merged);
+      return nextEls;
+    } else if (move instanceof MoveReset) {
+      return els;
+    } else {
+      throw new Error("unknown move: " + move);
+    }
+  }
+}
+
 class GameState {
   constructor() {
-    this.els = toUnsorted(uniqueList());
+    let els;
+    do {
+      els = uniqueList();
+    } while (!new GameEngine().solve(els));
+    this.els = toUnsorted(els);
     this.goal = this.els.toSorted();
+    this.max = Math.max(...this.els);
     this.mode = MODES.PLAY;
     this.moves = [];
     this.selectedTileIndex = null;
+    this.engine = new GameEngine();
+  }
+
+  isSolved() {
+    return arrayEqual(this.els, this.goal);
   }
 
   changeMode(newMode) {
@@ -115,44 +222,11 @@ class GameState {
     return ret;
   }
 
-  validate(list) {
-    let failed = GAME_RULES.filter((rule) => {
-      return !rule.validate(list, this);
-    }).map((rule) => rule.description);
-    return failed;
-  }
-
-  validateMove(move) {
-    let nextEls = this.evalNextState(move);
-    let failures = this.validate(nextEls);
-    return failures;
-  }
-
-  evalNextState(move) {
-    if (move instanceof MoveSplitTile) {
-      let { tileIndex, splitIndex } = move;
-      let value = this.els[tileIndex];
-      let splitLeft = splitIndex + 1;
-      let splitRight = value - splitLeft;
-      let nextEls = [...this.els];
-      nextEls.splice(tileIndex, 1, splitLeft, splitRight);
-      return nextEls;
-    } else if (move instanceof MoveMergeTiles) {
-      let { tileIndexA, tileIndexB } = move;
-      let [beforeIndex, afterIndex] = [tileIndexA, tileIndexB].toSorted();
-      let merged = this.els[beforeIndex] + this.els[afterIndex];
-      let nextEls = [...this.els];
-      nextEls.splice(beforeIndex, 2, merged);
-      return nextEls;
-    } else if (move instanceof MoveReset) {
-      return [...this.els];
-    } else {
-      throw new Error("unknown move: " + move);
-    }
-  }
-
   applyMove(move) {
-    let failures = this.validateMove(move);
+    let [failures, nextEls] = this.engine.validateMove(move, this.els, {
+      max: this.max,
+    });
+
     if (failures.length) {
       log("Could not apply move:", failures);
       this.changeMode(MODES.PLAY);
@@ -163,7 +237,8 @@ class GameState {
       // Only record history for real moves
       this.moves.push(move);
     }
-    this.els = this.evalNextState(move);
+
+    this.els = nextEls;
     this.changeMode(MODES.PLAY);
     return true;
   }
