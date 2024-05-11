@@ -1,0 +1,79 @@
+<html>
+
+<head>
+  <script src="main.js"></script>
+  <style>
+    :root {
+      --tile-unit: 2em;
+      --tile-height: 2em;
+    }
+
+    body {
+      background-color: lightpink;
+    }
+
+    .board {
+      display: flex;
+      flex-direction: row;
+    }
+
+    .tile {
+      height: var(--tile-height);
+      background-color: gray;
+      margin: 0.25em;
+      border: 1px solid black;
+      display: flex;
+      flex-direction: row;
+      position: relative;
+    }
+
+    .label {
+      position: absolute;
+      width: 100%;
+      text-align: center;
+      top: 100%;
+      line-height: var(--tile-height);
+    }
+
+    .tile.selected {
+      outline: 0.25em solid green;
+    }
+
+    .unit {
+      width: var(--tile-unit);
+      border: 1px dotted gray;
+      text-align: center;
+      line-height: var(--tile-height);
+    }
+  </style>
+</head>
+
+<body>
+  <button id='btn-new-game' type="submit">New Game</button>
+  <main>
+    <!-- <div class="board">
+      <div class="tile">
+        <div class="unit"></div>
+        <div class="unit"></div>
+        <div class="unit"></div>
+        <div class="unit"></div>
+        <div class="unit"></div>
+        <div class="unit"></div>
+        <div class="unit"></div>
+      </div>
+      <div class="tile">
+        <div class="unit"></div>
+        <div class="unit"></div>
+        <div class="unit"></div>
+      </div>
+      <div class="tile">
+        <div class="unit"></div>
+        <div class="unit"></div>
+        <div class="unit"></div>
+        <div class="unit"></div>
+      </div>
+    </div> -->
+  </main>
+</body>
+
+</html>
